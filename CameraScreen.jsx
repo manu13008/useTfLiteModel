@@ -1,8 +1,11 @@
-import { View, Text, StyleSheet , Image, SafeAreaView, Platform, Dimensions }from 'react-native';
-import { React, useState , useEffect, useRef } from 'react';
+import { View, Text, StyleSheet , Image, SafeAreaView, Platform, Dimensions, StatusBar }from 'react-native';
+import { React, useState , useEffect, useRef, useCallback } from 'react';
 import {useTensorflowModel, loadTensorflowModel} from 'react-native-fast-tflite'
 import { useResizePlugin } from 'vision-camera-resize-plugin';
 import {  Camera,  useCameraDevice,  useCameraPermission,  useFrameProcessor} from 'react-native-vision-camera'
+import   Svg, {Rect } from 'react-native-svg';
+
+import { useRunOnJS } from 'react-native-worklets-core';
 
 // Import traçage de formes sur l'ecran
 // import { Canvas, Circle, useCanvas, usePaint , useFont } from '@shopify/react-native-skia';
@@ -20,7 +23,7 @@ function modelToString(model) {
   )
 }
 
-const MAX_FRAMES = 100;
+const MAX_FRAMES = 50;
 
 function CameraScreen() {
 
@@ -30,8 +33,22 @@ function CameraScreen() {
   const { hasPermission, requestPermission } = useCameraPermission()
   const device = useCameraDevice('back')
 
-  const frameCountRef = useRef(0);
+  // Detections
+  const [detections, setDetections] = useState([]);
+  const detectionsRef = useRef([]);
   const { width, height } = Dimensions.get('window');
+
+
+  const frameCountRef = useRef(0);
+  
+
+
+  const updateDetections = useCallback((newDetections) => {
+    detectionsRef.current = newDetections;
+    setDetections([...newDetections]);
+  }, []);
+
+  const runOnJSUpdateDetections = useRunOnJS(updateDetections);
 
   useEffect(() => {
     (async () => {
@@ -43,6 +60,8 @@ function CameraScreen() {
     })();
   }, []);
 
+
+  
 
 /////////////////////////////////////////////////////////////////////////////////////
 
@@ -85,9 +104,9 @@ function CameraScreen() {
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet'
-      if (frameCountRef.current >= MAX_FRAMES) {
-        return
-      }
+      // if (frameCountRef.current >= MAX_FRAMES) {
+      //   return
+      // }
       
       try {
         if (actualModel == null) {
@@ -104,9 +123,6 @@ function CameraScreen() {
           dataType: 'uint8',
         });
 
-        // console.log('Resized object : ', JSON.stringify(resized))
-        // console.log('Resized object structure:', Object.keys(resized));
-
         
 
         // 2. Run model with given input buffer synchronously
@@ -119,7 +135,7 @@ function CameraScreen() {
         const num_detections = outputs[3]
 
         // console.log('Results identifiers',JSON.stringify(outputs))
-        // const num_detections = result[3]?.[0] ?? 0;
+        // console.log('Resized object : ', JSON.stringify(resized))
         
         console.log('Boxes : ', detection_boxes)
         console.log('Scores', detection_scores)
@@ -127,10 +143,13 @@ function CameraScreen() {
         console.log(`Detected ${num_detections[0]} objects!`)
         frameCountRef.current += 1;
 
-
+        console.log('Width', frame.width)
+        console.log('Height', frame.height)
+        const newDetections = []
         for (let i = 0; i < detection_boxes.length; i += 4) {
           const confidence = detection_scores[i / 4]
-          if (confidence > 0.7) {
+          
+          if (confidence > 0.6) {
               // 4. Draw a red box around the detected object!
               const left = detection_boxes[i]
               const top = detection_boxes[i + 1]
@@ -138,10 +157,22 @@ function CameraScreen() {
               const bottom = detection_boxes[i + 3]
               // const rect = SkRect.Make(left, top, right, bottom)
               // canvas.drawRect(rect, SkColors.Red)
+
+              newDetections.push({
+                x: left * frame.width,
+                y: top * frame.height,
+                width : (right - left) * frame.width,
+                height: (bottom - top) * frame.height ,
+              });
+
           }
+          
       }
-        
-      
+              // detectionsRef.current = newDetections;
+              runOnJSUpdateDetections(newDetections);
+              // Utiliser runOnJS pour mettre à jour l'état de manière sûre
+              // runOnJS(updateDetections)(newDetections);
+              console.log('Detections', detectionsRef.current)
       } catch (error) {
         console.error('Error in frame processor:', error);
         console.error('Error in frame processor:', error.message);
@@ -149,26 +180,24 @@ function CameraScreen() {
         console.error('Error details:', JSON.stringify(error));
       }
       
-    
-
-    
+  
   },
 
     [actualModel]
   )
 
-  
+        // const squares = [
+        //   { x: 50, y: 100, height : 50, width : 30 }, // Carré 1
+        //   { x: 200, y: 300, height : 50, width : 60 }, // Carré 2
+        // ];
+
+console.log('Detections', detectionsRef.current)
 
 
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Welcome on the second screen!</Text>
-      <Image
-          source={require('./android/app/src/main/assets/photo.png')}
-          style={styles.image}
-          resizeMode="contain"
-        />
-        {isReady && hasPermission && device != null ? (
+<StatusBar translucent backgroundColor="transparent" />
+{isReady && hasPermission && device != null ? (
   <View style={StyleSheet.absoluteFill}>
   <Camera
     device={device}
@@ -177,19 +206,35 @@ function CameraScreen() {
     frameProcessor={frameProcessor}
     pixelFormat="yuv"
   />
-  {/* <Canvas style={StyleSheet.absoluteFill}>
-    <Circle
-      cx={width / 2}
-      cy={height / 2}
-      r={50}
-      color="red"
-    />
-  </Canvas> */}
+  <Svg height={height} width={width} style={StyleSheet.absoluteFill}>
+        {detectionsRef.current.map((detection, index) => (
+          <Rect
+            key={index}
+            x={detection.x}
+            y={detection.y}
+            width={detection.width}
+            height={detection.height}
+            stroke="red" // Couleur des bords
+            strokeWidth="2"
+            fill="none" // Pas de remplissage pour un carré vide
+          />
+        ))}
+      </Svg> 
+
 </View>
         
       ) : (
         <Text>No Camera available.</Text>
       )}
+
+
+      {/* <Text style={styles.text}>Welcome on the second screen!</Text>
+      <Image
+          source={require('./android/app/src/main/assets/photo.png')}
+          style={styles.image}
+          resizeMode="contain"
+        /> */}
+
 
     </View>
   );
@@ -198,8 +243,8 @@ function CameraScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    // justifyContent: 'center',
+    // alignItems: 'center',
   },
   text: {
     fontSize: 20,

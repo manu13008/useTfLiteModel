@@ -117,7 +117,10 @@ function App() {
     <NavigationContainer>
       <Stack.Navigator>
         <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="Camera" component={CameraScreen} />
+        <Stack.Screen name="Camera" component={CameraScreen} options={{
+            headerShown: false, // Ceci cache la barre d'en-tête
+            // Vous pouvez ajouter d'autres options ici si nécessaire
+          }}/>
       </Stack.Navigator>
     </NavigationContainer>
   );
