@@ -7,6 +7,9 @@ import   Svg, {Rect } from 'react-native-svg';
 
 import { useRunOnJS } from 'react-native-worklets-core';
 
+// Mesure de performance
+import { PerformanceObserver, performance } from 'react-native';
+
 // Import traçage de formes sur l'ecran
 // import { Canvas, Circle, useCanvas, usePaint , useFont } from '@shopify/react-native-skia';
 
@@ -23,6 +26,8 @@ function modelToString(model) {
   )
 }
 
+
+
 const MAX_FRAMES = 50;
 
 function CameraScreen() {
@@ -33,6 +38,8 @@ function CameraScreen() {
   const { hasPermission, requestPermission } = useCameraPermission()
   const device = useCameraDevice('back')
 
+
+
   // Detections
   const [detections, setDetections] = useState([]);
   const detectionsRef = useRef([]);
@@ -41,14 +48,22 @@ function CameraScreen() {
 
   const frameCountRef = useRef(0);
   
+  const windowWidth = Dimensions.get('window').width;
+  const windowHeight = Dimensions.get('window').height;
+
+  console.log('Height and width ', windowHeight , windowWidth)
 
 
+
+// Pour pouvoir tracer les rectangles sur l'image
   const updateDetections = useCallback((newDetections) => {
     detectionsRef.current = newDetections;
     setDetections([...newDetections]);
   }, []);
 
   const runOnJSUpdateDetections = useRunOnJS(updateDetections);
+
+//////////////////////////////////////////////////////////////////
 
   useEffect(() => {
     (async () => {
@@ -69,6 +84,9 @@ function CameraScreen() {
   // Loading Model
   // const model  = useTensorflowModel(require('./android/app/src/main/assets/best_float16.tflite'))//model path
     const model  = useTensorflowModel(require('./android/app/src/main/assets/efficientDet.tflite'))//model path
+
+
+
   // const model  = useTensorflowModel(require('./android/app/src/main/assets/object_detection_mobile_object_localizer_v1_1_default_1.tflite'))//model path
   // const model  = useTensorflowModel(require('./android/app/src/main/assets/mobilenet_v2_0.35_96.tflite'))//model path
   
@@ -96,9 +114,6 @@ function CameraScreen() {
 
 
 
-  console.log('Model1', model, actualModel)
-  console.log(`Model: ${model.state} (${model.model != null})`)
-
   const { resize } = useResizePlugin()
 
   const frameProcessor = useFrameProcessor(
@@ -113,7 +128,20 @@ function CameraScreen() {
           console.log('Model not loaded yet');
           return;
         }
-        // console.log(`Running inference on frame`, frame.toString());
+        // console.log(`Running inference on frame length`, frame.toString());
+
+    // Afficher les métadonnées de la frame
+      console.log('Frame metadata:', {
+      width: frame.width,
+      height: frame.height,
+      timestamp: frame.timestamp,
+      pixelFormat: frame.pixelFormat,
+      isMirrored: frame.isMirrored,
+      orientation: frame.orientation,
+      bytesPerRow: frame.bytesPerRow,
+      planesCount: frame.planesCount,
+    });
+
         const resized = resize(frame, {
           scale: {
             width: 320,
@@ -121,18 +149,28 @@ function CameraScreen() {
           },
           pixelFormat: 'rgb',
           dataType: 'uint8',
+
         });
 
-        
-
-        // 2. Run model with given input buffer synchronously
+        for (let i =0 ; i < 15 ; i++) {
+          console.log('Affichage données' , resized[i*200])
+      }
+        const start = performance.now();
+        // Run model with given input buffer synchronously
         const outputs = actualModel.runSync([resized])
 
-        // 3. Interpret outputs accordingly
+        const end = performance.now();
+        const executionTime = end - start;
+        
+        console.log(`Temps d'exécution de : ${executionTime.toFixed(2)} ms`);
+
+        // Interpret outputs accordingly
         const detection_boxes = outputs[0]
         const detection_classes = outputs[1]
         const detection_scores = outputs[2]
         const num_detections = outputs[3]
+
+       
 
         // console.log('Results identifiers',JSON.stringify(outputs))
         // console.log('Resized object : ', JSON.stringify(resized))
@@ -145,36 +183,42 @@ function CameraScreen() {
 
         console.log('Width', frame.width)
         console.log('Height', frame.height)
+
         const newDetections = []
         for (let i = 0; i < detection_boxes.length; i += 4) {
           const confidence = detection_scores[i / 4]
           
-          if (confidence > 0.6) {
+          if (confidence > 0.4) {
               // 4. Draw a red box around the detected object!
               const left = detection_boxes[i]
               const top = detection_boxes[i + 1]
               const right = detection_boxes[i + 2]
               const bottom = detection_boxes[i + 3]
-              // const rect = SkRect.Make(left, top, right, bottom)
-              // canvas.drawRect(rect, SkColors.Red)
+
 
               newDetections.push({
-                x: left * frame.width,
-                y: top * frame.height,
-                width : (right - left) * frame.width,
-                height: (bottom - top) * frame.height ,
+                // x: left * frame.width,
+                // y: top * frame.height,
+                // width : (right - left) * frame.width,
+                // height: (bottom - top) * frame.height ,
+
+                x: 400 - ( left * 400) ,
+                y: top * 522,
+                width : -(right - left) * 400,
+                height: (bottom - top) * 522 ,
+
+
               });
 
           }
           
       }
-              // detectionsRef.current = newDetections;
+              detectionsRef.current = newDetections;
               runOnJSUpdateDetections(newDetections);
               // Utiliser runOnJS pour mettre à jour l'état de manière sûre
               // runOnJS(updateDetections)(newDetections);
-              console.log('Detections', detectionsRef.current)
+              // console.log('Detections', detectionsRef.current)
       } catch (error) {
-        console.error('Error in frame processor:', error);
         console.error('Error in frame processor:', error.message);
         console.error('Error stack:', error.stack);
         console.error('Error details:', JSON.stringify(error));
@@ -186,24 +230,28 @@ function CameraScreen() {
     [actualModel]
   )
 
-        // const squares = [
-        //   { x: 50, y: 100, height : 50, width : 30 }, // Carré 1
-        //   { x: 200, y: 300, height : 50, width : 60 }, // Carré 2
-        // ];
-
-console.log('Detections', detectionsRef.current)
 
 
   return (
     <View style={styles.container}>
 <StatusBar translucent backgroundColor="transparent" />
 {isReady && hasPermission && device != null ? (
-  <View style={StyleSheet.absoluteFill}>
+
+    <View style={{ width: '100%', aspectRatio: 3/4}}>
+  {/* <View style={StyleSheet.absoluteFill}> */}
   <Camera
     device={device}
     style={StyleSheet.absoluteFill}
+    // style={[StyleSheet.absoluteFill, { transform: [{ rotate: '90deg' }] }]}
     isActive={true}
+    isMirrored={true}
+    orientation='landscapeLeft'
     frameProcessor={frameProcessor}
+ 
+    
+    // resizeMode='contain'
+    
+    // resolution={{ width: 640, height: 640 }}
     pixelFormat="yuv"
   />
   <Svg height={height} width={width} style={StyleSheet.absoluteFill}>
@@ -215,8 +263,8 @@ console.log('Detections', detectionsRef.current)
             width={detection.width}
             height={detection.height}
             stroke="red" // Couleur des bords
-            strokeWidth="2"
-            fill="none" // Pas de remplissage pour un carré vide
+            strokeWidth="2" // Epaisseur ligne
+            fill="none" // Pas de remplissage 
           />
         ))}
       </Svg> 

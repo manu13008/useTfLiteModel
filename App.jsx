@@ -30,6 +30,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Button } from 'react-native';
 import CameraScreen from './CameraScreen'; // Assurez-vous que le chemin est correct
+import CameraScreen2 from './CameraScreen2'; // Assurez-vous que le chemin est correct
 
 
 const Stack = createNativeStackNavigator();
@@ -87,23 +88,15 @@ function HomeScreen({navigation}) {
           style={{
             backgroundColor: isDarkMode ? Colors.black : Colors.white,
           }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
+        
+
           <Button
-            title="Aller à la deuxième page"
+            title="Charger EfficientDetLite"
             onPress={() => navigation.navigate('Camera')}
+          />
+                    <Button
+            title="Charger YoloLite"
+            onPress={() => navigation.navigate('Camera2')}
           />
         </View>
       </ScrollView>
@@ -118,6 +111,10 @@ function App() {
       <Stack.Navigator>
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Camera" component={CameraScreen} options={{
+            headerShown: false, // Ceci cache la barre d'en-tête
+            // Vous pouvez ajouter d'autres options ici si nécessaire
+          }}/>
+                  <Stack.Screen name="Camera2" component={CameraScreen2} options={{
             headerShown: false, // Ceci cache la barre d'en-tête
             // Vous pouvez ajouter d'autres options ici si nécessaire
           }}/>
